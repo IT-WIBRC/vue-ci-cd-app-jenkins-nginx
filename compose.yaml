@@ -1,0 +1,26 @@
+version: "3.8"
+
+services:
+  jenkins:
+    image: docker.io/jenkins/jenkins:lts
+    user: root # Run as root to handle uid/gid conflicts and permission issues with socket/volumes
+    privileged: true # Required for security reasons when mounting the socket
+    container_name: jenkins
+    ports:
+      - "8080:8080" # Jenkins UI
+      - "50000:50000" # Agent communication
+    volumes:
+      - jenkins_home:/var/jenkins_home # Persistent Jenkins data
+      # 🌟 CRITICAL: Mount the host's container socket for Jenkins to run 'podman' commands.
+      # Change /var/run/podman/podman.sock to /var/run/docker.sock if using Docker.
+      - /run/user/1000/podman/podman.sock:/var/run/podman/podman.sock
+      - /usr/bin/podman:/usr/bin/podman # Optional: Ensure podman binary is available inside the container
+      - /etc/hosts:/etc/hosts:ro # To ensure correct networking resolution
+    environment:
+      # Optional: Set timezone
+      - TZ=Africa/Douala
+
+volumes:
+  jenkins_home:
+# podman logs jenkins | grep 'initialAdminPassword'
+# Key: GitHub-to-Jenkins-Webhooks
