@@ -1,16 +1,24 @@
 FROM docker.io/library/nginx:stable-alpine AS final
 
+# 1. Custom Nginx Configuration Setup
 RUN rm /etc/nginx/nginx.conf
 COPY nginx-main.conf /etc/nginx/nginx.conf
 COPY nginx.conf /etc/nginx/conf.d/
 
+# 2. Grant Non-Root User Permissions (CRITICAL for security & stability)
+# Fixes 'mkdir() "/var/cache/nginx/client_temp" failed (13: Permission denied)'
 RUN mkdir -p /var/run/nginx \
     && chown -R nginx:nginx /var/cache/nginx \
     && chown -R nginx:nginx /var/run/nginx
 
+# 3. Copy the required static files from the local Jenkins workspace
+# The 'dist' folder is created by the 'npm run build' step in Jenkins Stage 5.
+# We no longer need 'COPY --from=build' because the build happened locally.
+# We copy the 'dist' folder from the local context (the Jenkins workspace).
 COPY dist /usr/share/nginx/html
 
 EXPOSE 8080
 
+# 4. Run as Non-Root User (Security Best Practice)
 USER nginx
 CMD ["nginx", "-g", "daemon off;"]
