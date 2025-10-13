@@ -1,5 +1,4 @@
 pipeline {
-    // Global Agent: All execution runs on the designated host agent.
     agent {
         label 'docker-deploy-host'
     }
@@ -9,13 +8,13 @@ pipeline {
         APP_NAME = 'vue-ci-cd-app-jenkins-nginx'
         REGISTRY_HOST = 'docker.io'
         NODE_IMAGE = 'node:20-alpine'
-        CONTAINER_CLI = 'docker' // Set to 'docker'
+        CONTAINER_CLI = 'docker'
         E2E_PORT = 8081
         PROD_PORT = 8080
         PROD_CONTAINER_NAME = 'vue-spa-app'
         FINAL_PROD_TAG = "${REGISTRY_HOST}/${DOCKER_USER}/${APP_NAME}:latest"
         TEMP_CI_IMAGE_TAG = ''
-        PLAYWRIGHT_IMAGE = 'mcr.microsoft.com/playwright:v1.45.0-jammy'
+        PLAYWRIGHT_IMAGE = 'mcr.microsoft.com/playwright:v1.56.0-jammy'
     }
 
     stages {
@@ -74,18 +73,16 @@ pipeline {
                     ${CONTAINER_CLI} run --rm -v \$(pwd):/app -w /app \
                     --network=host \
                     ${env.PLAYWRIGHT_IMAGE} \
-                    npm run test:e2e
+                    npm run test:e2e:ci
                     """
                 }
             }
             post {
                 always {
-                    // FIX: Use CONTAINER_CLI for cleanup
                     sh "${CONTAINER_CLI} rm -f e2e-runner || true"
                 }
                 failure {
                     archiveArtifacts artifacts: 'playwright-report/**, test-results/**, e2e-report/**' , onlyIfSuccessful: false
-                    // FIX: Use CONTAINER_CLI for logs
                     sh "${CONTAINER_CLI} logs e2e-runner > e2e-runner-logs.txt"
                     archiveArtifacts artifacts: 'e2e-runner-logs.txt', onlyIfSuccessful: false
                 }
@@ -95,7 +92,6 @@ pipeline {
         stage('CLEANUP CI') {
             when { anyOf { branch 'develop'; branch 'main'; changeRequest target: 'develop' } }
             steps {
-                // FIX: Use CONTAINER_CLI for cleanup
                 sh "${CONTAINER_CLI} rm -f e2e-runner || true"
                 sh "${CONTAINER_CLI} rmi ${env.TEMP_CI_IMAGE_TAG} || true"
             }
