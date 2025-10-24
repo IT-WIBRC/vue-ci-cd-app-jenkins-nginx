@@ -1,0 +1,52 @@
+services:
+  jenkins:
+    image: jenkins/jenkins:latest
+    user: root
+    privileged: true
+    container_name: jenkins
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      # Mount host's Docker socket/binary for D-I-D functionality
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /usr/bin/docker:/usr/bin/docker
+    environment:
+      - TZ=Africa/Douala
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/login || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 2. Automated Jenkins Agent Service (docker-deploy-host)
+  jenkins-agent:
+    image: jenkins-agent:latest
+    container_name: docker-deploy-host-agent
+    user: root
+    depends_on:
+      jenkins:
+        condition: service_healthy
+    volumes:
+      # CRITICAL: Mount the host's Docker socket
+      - /var/run/docker.sock:/var/run/docker.sock
+      # 👇 FIX: Use a NAMED VOLUME for the workspace instead of a BIND MOUNT
+      - jenkins_agent_workspace:/home/jenkins/workspace
+    environment:
+      - JENKINS_URL=${JENKINS_URL}
+      - JENKINS_AGENT_NAME=${JENKINS_AGENT_NAME}
+      - JENKINS_AGENT_SECRET=${JENKINS_AGENT_SECRET}
+      - DOCKER_GID=${DOCKER_GID} # This variable must be set in your .env file!
+    command: sh -c "groupmod -g ${DOCKER_GID} docker && usermod -aG docker jenkins && chown -R jenkins:jenkins /home/jenkins/workspace && su jenkins -c 'java -jar /usr/share/jenkins/agent.jar -url ${JENKINS_URL} -secret ${JENKINS_AGENT_SECRET} -name ${JENKINS_AGENT_NAME} -webSocket -workDir /home/jenkins/workspace'"
+
+volumes:
+  jenkins_home:
+  jenkins_agent_workspace: # 👈 New named volume for the agent's workspace
+
+networks:
+  default:
+    driver: bridge
+    driver_opts:
+      com.docker.network.dns: "8.8.8.8,1.1.1.1"
