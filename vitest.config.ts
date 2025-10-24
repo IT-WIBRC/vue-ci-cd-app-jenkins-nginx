@@ -6,6 +6,15 @@ export default mergeConfig(
   viteConfig,
   defineConfig({
     test: {
+      reporters: ['junit', "json"],
+      outputFile: {
+        junit: 'coverages/unit-tests.xml',
+      },
+      coverage: {
+        provider: 'v8',
+        reporter: ['text', 'json', 'lcov'],
+        reportsDirectory: './coverages/coverage',
+      },
       environment: 'jsdom',
       exclude: [...configDefaults.exclude, 'e2e/**'],
       root: fileURLToPath(new URL('./', import.meta.url)),

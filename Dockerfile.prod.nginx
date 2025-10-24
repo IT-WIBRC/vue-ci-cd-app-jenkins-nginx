@@ -1,0 +1,16 @@
+FROM docker.io/library/nginx:stable-alpine AS final
+
+RUN rm /etc/nginx/nginx.conf
+COPY nginx-main.conf /etc/nginx/nginx.conf
+COPY nginx.conf /etc/nginx/conf.d/
+
+RUN mkdir -p /var/run/nginx \
+    && chown -R nginx:nginx /var/cache/nginx \
+    && chown -R nginx:nginx /var/run/nginx
+
+COPY dist /usr/share/nginx/html
+
+EXPOSE 8080
+
+USER nginx
+CMD ["nginx", "-g", "daemon off;"]

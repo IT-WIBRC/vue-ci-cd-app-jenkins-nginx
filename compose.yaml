@@ -1,0 +1,38 @@
+services:
+  jenkins:
+    image: jenkins/jenkins:latest
+    user: root
+    privileged: true
+    container_name: jenkins
+    ports:
+      - "8080:8080" # Jenkins UI
+      - "50000:50000" # Agent communication
+    volumes:
+      - jenkins_home:/var/jenkins_home # Persistent Jenkins data
+      # 🌟 CRITICAL CHANGE: Mount the host's Docker socket
+      # This allows the 'docker' CLI inside the container to talk to the host's Docker daemon.
+      - /var/run/docker.sock:/var/run/docker.sock
+
+      # REMOVED: /run/user/1000/podman/podman.sock mount
+      # REMOVED: /usr/bin/podman mount (no longer needed)
+
+      # Optional: Mount the Docker CLI binary into the container to ensure it's available.
+      # This is usually needed if you run the container as a non-root user, but we'll include it for robustness.
+      - /usr/bin/docker:/usr/bin/docker
+
+      - /etc/hosts:/etc/hosts:ro # To ensure correct networking resolution
+    environment:
+      # Optional: Set timezone
+      - TZ=Africa/Douala
+      # Optional: Set DOCKER_HOST to explicitly point to the mounted socket
+      - DOCKER_HOST=unix:///var/run/docker.sock
+
+volumes:
+  jenkins_home:
+# Commands for Password Retrieval:
+# docker logs jenkins | grep 'initialAdminPassword'
+# Or, more reliably:
+# docker exec -it jenkins cat /var/jenkins_home/secrets/initialAdminPassword
+#
+# Remember the Key: GitHub-to-Jenkins-Webhooks
+# java -jar agent.jar -url http://localhost:8080/ -secret 9b210d1cc9cd85e86f2bf1ee77f6983de58263cad2416e3f0cb4c9fc3d8f932a -name "docker-deploy-host" -webSocket -workDir "/home/pc/workspace"

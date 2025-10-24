@@ -1,0 +1,14 @@
+name: PR Merge Guard
+on:
+    pull_request:
+        branches:
+            - main
+jobs:
+    check_source_branch:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Check source branch
+              if: github.head_ref != 'develop'
+              run: |
+                  echo "::error title=PR Restriction::Pull Requests targeting 'main' can only originate from the 'develop' branch."
+                  exit 1
