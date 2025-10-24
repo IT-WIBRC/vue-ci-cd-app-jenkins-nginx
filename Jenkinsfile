@@ -1,21 +1,20 @@
 pipeline {
-    // Global Agent: All execution runs on the designated host agent.
     agent {
         label 'docker-deploy-host'
     }
 
     environment {
-        DOCKER_USER = 'itwibrc'
-        APP_NAME = 'vue-ci-cd-app-jenkins-nginx'
         REGISTRY_HOST = 'docker.io'
-        NODE_IMAGE = 'node:20-alpine'
-        CONTAINER_CLI = 'docker' // Set to 'docker'
+        DOCKER_USER = 'itwibrc'
+        CONTAINER_CLI = 'docker'
+        APP_NAME = 'vue-ci-cd-app-jenkins-nginx'
+        NODE_IMAGE = 'node:22-alpine'
         E2E_PORT = 8081
         PROD_PORT = 8080
         PROD_CONTAINER_NAME = 'vue-spa-app'
         FINAL_PROD_TAG = "${REGISTRY_HOST}/${DOCKER_USER}/${APP_NAME}:latest"
-        TEMP_CI_IMAGE_TAG = ''
-        PLAYWRIGHT_IMAGE = 'mcr.microsoft.com/playwright:v1.45.0-jammy'
+        PLAYWRIGHT_IMAGE = 'mcr.microsoft.com/playwright:v1.56.0-jammy'
+        TEMP_CI_IMAGE_TAG = ""
     }
 
     stages {
@@ -27,21 +26,27 @@ pipeline {
         }
 
         stage('INIT & AUDIT') {
-            when { anyOf { branch 'develop'; branch 'main'; changeRequest target: 'develop' } }
+            when {
+                anyOf { branch 'develop'; changeRequest(); }
+            }
             steps {
                 sh "${CONTAINER_CLI} run --rm -v \$(pwd):/app -w /app ${env.NODE_IMAGE} sh -c 'npm ci && npm audit --production || true'"
             }
         }
 
         stage('LINT') {
-            when { anyOf { branch 'develop'; branch 'main'; changeRequest target: 'develop' } }
+            when {
+                anyOf { branch 'develop'; changeRequest(); }
+            }
             steps {
                 sh "${CONTAINER_CLI} run --rm -v \$(pwd):/app -w /app ${env.NODE_IMAGE} npm run lint"
             }
         }
 
         stage('TEST:UNIT') {
-            when { anyOf { branch 'develop'; branch 'main'; changeRequest target: 'develop' } }
+            when {
+                anyOf { branch 'develop'; changeRequest(); }
+            }
             steps {
                 sh "${CONTAINER_CLI} run --rm -v \$(pwd):/app -w /app ${env.NODE_IMAGE} npm run test:ci"
             }
@@ -54,52 +59,58 @@ pipeline {
         }
 
         stage('BUILD') {
-            when { anyOf { branch 'develop'; branch 'main'; changeRequest target: 'develop' } }
+            when {
+                anyOf { branch 'develop'; changeRequest(); }
+            }
             steps {
                 sh "${CONTAINER_CLI} run --rm -v \$(pwd):/app -w /app ${env.NODE_IMAGE} npm run build"
             }
         }
 
         stage('TEST:E2E') {
-            when { anyOf { branch 'develop'; branch 'main'; changeRequest target: 'develop' } }
+            when {
+                anyOf { branch 'develop'; changeRequest(); }
+            }
             steps {
                 script {
                     env.TEMP_CI_IMAGE_TAG = "local/${env.APP_NAME}:test-${env.BUILD_NUMBER}"
 
                     sh "${CONTAINER_CLI} build -t ${env.TEMP_CI_IMAGE_TAG} -f Dockerfile.prod.nginx ."
 
+                    sh "${CONTAINER_CLI} rm -f e2e-runner || true"
+
                     sh "${CONTAINER_CLI} run -d --name e2e-runner -p ${env.E2E_PORT}:${env.PROD_PORT} ${env.TEMP_CI_IMAGE_TAG}"
 
                     sh """
                     ${CONTAINER_CLI} run --rm -v \$(pwd):/app -w /app \
                     --network=host \
+                    -e CI=true \
+                    -e PLAYWRIGHT_HEADLESS=1 \
                     ${env.PLAYWRIGHT_IMAGE} \
-                    npm run test:e2e
+                    npm run test:e2e:ci
                     """
                 }
             }
             post {
-                always {
-                    // FIX: Use CONTAINER_CLI for cleanup
-                    sh "${CONTAINER_CLI} rm -f e2e-runner || true"
-                }
                 failure {
                     archiveArtifacts artifacts: 'playwright-report/**, test-results/**, e2e-report/**' , onlyIfSuccessful: false
-                    // FIX: Use CONTAINER_CLI for logs
-                    sh "${CONTAINER_CLI} logs e2e-runner > e2e-runner-logs.txt"
-                    archiveArtifacts artifacts: 'e2e-runner-logs.txt', onlyIfSuccessful: false
                 }
             }
         }
 
         stage('CLEANUP CI') {
-            when { anyOf { branch 'develop'; branch 'main'; changeRequest target: 'develop' } }
+            when {
+                anyOf { branch 'develop'; changeRequest(); }
+            }
             steps {
-                // FIX: Use CONTAINER_CLI for cleanup
+                sh "${CONTAINER_CLI} logs e2e-runner > e2e-runner-logs.txt || true"
+                archiveArtifacts artifacts: 'e2e-runner-logs.txt', onlyIfSuccessful: false
+
                 sh "${CONTAINER_CLI} rm -f e2e-runner || true"
                 sh "${CONTAINER_CLI} rmi ${env.TEMP_CI_IMAGE_TAG} || true"
             }
         }
+
 
         stage('DEPLOYMENT') {
             when { branch 'main' }
@@ -131,6 +142,20 @@ pipeline {
         stage('NOTIFICATION') {
             steps {
                 echo "Pipeline finished for branch ${env.BRANCH_NAME}. Status: ${currentBuild.result}"
+            }
+        }
+    }
+
+    post {
+        always {
+            script {
+                if (env.BRANCH_NAME != 'main') {
+                    sh "${CONTAINER_CLI} logs e2e-runner > e2e-runner-logs.txt || true"
+                    archiveArtifacts artifacts: 'e2e-runner-logs.txt', onlyIfSuccessful: false
+
+                    sh "${CONTAINER_CLI} rm -f e2e-runner || true"
+                    sh "${CONTAINER_CLI} rmi ${env.TEMP_CI_IMAGE_TAG} || true"
+                }
             }
         }
     }
