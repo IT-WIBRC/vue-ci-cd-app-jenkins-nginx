@@ -27,16 +27,24 @@ pipeline {
 
         stage('INIT & AUDIT') {
             when {
-                anyOf { branch 'develop'; changeRequest(); }
+                expression {
+                    return env.BRANCH_NAME.matches('''^(main|develop|fix[-/].*|release[-/].*|refactor[-/].*|feat[-/].*|chore[-/].*|ci[-/].*|build[-/].*|perf[-/].*|docs[-/].*|style[-/].*|test[-/].*|revert[-/].*)$''')
+                }
             }
             steps {
-                sh "${CONTAINER_CLI} run --rm -v \$(pwd):/app -w /app ${env.NODE_IMAGE} sh -c 'npm ci && npm audit --production || true'"
+                // DNS REMOVED
+                sh "${CONTAINER_CLI} run --rm -v \$(pwd):/app -w /app ${env.NODE_IMAGE} rm -rf node_modules"
+
+                // DNS REMOVED
+                sh "${CONTAINER_CLI} run --rm -v \$(pwd):/app -w /app ${env.NODE_IMAGE} sh -c \"npm ci && npm audit --production || true\""
             }
         }
 
         stage('LINT') {
             when {
-                anyOf { branch 'develop'; changeRequest(); }
+                expression {
+                    return env.BRANCH_NAME.matches('''^(main|develop|fix[-/].*|release[-/].*|refactor[-/].*|feat[-/].*|chore[-/].*|ci[-/].*|build[-/].*|perf[-/].*|docs[-/].*|style[-/].*|test[-/].*|revert[-/].*)$''')
+                }
             }
             steps {
                 sh "${CONTAINER_CLI} run --rm -v \$(pwd):/app -w /app ${env.NODE_IMAGE} npm run lint"
@@ -45,7 +53,9 @@ pipeline {
 
         stage('TEST:UNIT') {
             when {
-                anyOf { branch 'develop'; changeRequest(); }
+                expression {
+                    return env.BRANCH_NAME.matches('''^(main|develop|fix[-/].*|release[-/].*|refactor[-/].*|feat[-/].*|chore[-/].*|ci[-/].*|build[-/].*|perf[-/].*|docs[-/].*|style[-/].*|test[-/].*|revert[-/].*)$''')
+                }
             }
             steps {
                 sh "${CONTAINER_CLI} run --rm -v \$(pwd):/app -w /app ${env.NODE_IMAGE} npm run test:ci"
@@ -60,7 +70,9 @@ pipeline {
 
         stage('BUILD') {
             when {
-                anyOf { branch 'develop'; changeRequest(); }
+                expression {
+                    return env.BRANCH_NAME.matches('''^(main|develop|fix[-/].*|release[-/].*|refactor[-/].*|feat[-/].*|chore[-/].*|ci[-/].*|build[-/].*|perf[-/].*|docs[-/].*|style[-/].*|test[-/].*|revert[-/].*)$''')
+                }
             }
             steps {
                 sh "${CONTAINER_CLI} run --rm -v \$(pwd):/app -w /app ${env.NODE_IMAGE} npm run build"
@@ -69,7 +81,9 @@ pipeline {
 
         stage('TEST:E2E') {
             when {
-                anyOf { branch 'develop'; changeRequest(); }
+                expression {
+                    return env.BRANCH_NAME.matches('''^(main|develop|fix[-/].*|release[-/].*|refactor[-/].*|feat[-/].*|chore[-/].*|ci[-/].*|build[-/].*|perf[-/].*|docs[-/].*|style[-/].*|test[-/].*|revert[-/].*)$''')
+                }
             }
             steps {
                 script {
@@ -82,11 +96,11 @@ pipeline {
                     sh "${CONTAINER_CLI} run -d --name e2e-runner -p ${env.E2E_PORT}:${env.PROD_PORT} ${env.TEMP_CI_IMAGE_TAG}"
 
                     sh """
-                    ${CONTAINER_CLI} run --rm -v \$(pwd):/app -w /app \
-                    --network=host \
-                    -e CI=true \
-                    -e PLAYWRIGHT_HEADLESS=1 \
-                    ${env.PLAYWRIGHT_IMAGE} \
+                    ${CONTAINER_CLI} run --rm -v \$(pwd):/app -w /app \\
+                    --network=host \\
+                    -e CI=true \\
+                    -e PLAYWRIGHT_HEADLESS=1 \\
+                    ${env.PLAYWRIGHT_IMAGE} \\
                     npm run test:e2e:ci
                     """
                 }
@@ -100,7 +114,9 @@ pipeline {
 
         stage('CLEANUP CI') {
             when {
-                anyOf { branch 'develop'; changeRequest(); }
+                expression {
+                    return env.BRANCH_NAME.matches('''^(main|develop|fix[-/].*|release[-/].*|refactor[-/].*|feat[-/].*|chore[-/].*|ci[-/].*|build[-/].*|perf[-/].*|docs[-/].*|style[-/].*|test[-/].*|revert[-/].*)$''')
+                }
             }
             steps {
                 sh "${CONTAINER_CLI} logs e2e-runner > e2e-runner-logs.txt || true"
@@ -110,7 +126,6 @@ pipeline {
                 sh "${CONTAINER_CLI} rmi ${env.TEMP_CI_IMAGE_TAG} || true"
             }
         }
-
 
         stage('DEPLOYMENT') {
             when { branch 'main' }
@@ -129,10 +144,10 @@ pipeline {
                     sh "${CONTAINER_CLI} rm ${env.PROD_CONTAINER_NAME} || true"
 
                     sh """
-                    ${CONTAINER_CLI} run -d \
-                      --name ${env.PROD_CONTAINER_NAME} \
-                      --restart always \
-                      -p 80:8080 \
+                    ${CONTAINER_CLI} run -d \\
+                      --name ${env.PROD_CONTAINER_NAME} \\
+                      --restart always \\
+                      -p 80:8080 \\
                       ${env.FINAL_PROD_TAG}
                     """
                 }
