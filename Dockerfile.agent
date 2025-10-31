@@ -1,0 +1,12 @@
+FROM jenkins/agent:latest-alpine
+
+# Switch to root to install the Docker CLI
+USER root
+# Install 'shadow' for 'groupmod'
+RUN apk add --no-cache docker bash shadow
+
+# Switch back to the non-root user
+USER jenkins
+
+# The base image provides the /usr/local/bin/jenkins-agent (or similar) executable
+# but we will now override the command in docker-compose for certainty.

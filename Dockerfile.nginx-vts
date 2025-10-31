@@ -1,0 +1,64 @@
+## Stage 1: Builder - Compiles Nginx with the VTS Module
+FROM alpine:3.18 AS builder
+
+# Set Nginx version to match stable-alpine base for compatibility
+ENV NGINX_VERSION 1.24.0-r3
+
+# Install dependencies needed for compiling Nginx
+RUN apk add --no-cache \
+    build-base \
+    gcc \
+    linux-headers \
+    pcre-dev \
+    zlib-dev \
+    openssl-dev \
+    curl \
+    git
+
+# Download Nginx source code, clone VTS, configure, and compile
+RUN curl -L https://nginx.org/download/nginx-${NGINX_VERSION%-*}.tar.gz | tar xz \
+    && cd /nginx-${NGINX_VERSION%-*} \
+    && git clone https://github.com/vozlt/nginx-module-vts.git \
+    && ./configure \
+    --prefix=/usr/local/nginx \
+    --with-http_ssl_module \
+    --add-module=./nginx-module-vts \
+    && make \
+    && make install
+
+## ---
+# Stage 2: Final - Creates the Generic, Reusable Image
+## ---
+# Start from the official Nginx base
+FROM nginx:stable-alpine
+
+# Install the necessary runtime libraries
+RUN apk add --no-cache \
+    pcre \
+    zlib \
+    openssl
+
+# 1. Copy the custom-compiled binary to the standard location
+COPY --from=builder /usr/local/nginx/sbin/nginx /usr/sbin/nginx
+
+# 2. Configure paths and VTS: Remove default config to use custom main file
+RUN rm /etc/nginx/nginx.conf
+
+# 3. Copy the custom configurations
+COPY nginx-vts-main.conf /etc/nginx/nginx.conf
+COPY nginx-vts-metrics.conf /etc/nginx/conf.d/vts-metrics.conf
+
+# 4. Set up Nginx run directory and permissions for the standard Nginx user
+# MODIFIED: Ensure /var/log/nginx exists and symlink to standard logs
+RUN mkdir -p /var/run/nginx \
+    && mkdir -p /var/log/nginx \
+    && ln -sf /dev/stdout /var/log/nginx/access.log \
+    && ln -sf /dev/stderr /var/log/nginx/error.log \
+    && chown -R nginx:nginx /var/cache/nginx \
+    && chown -R nginx:nginx /var/run/nginx
+
+# EXPOSE 8080 (already inherited from base, but good practice to state)
+EXPOSE 8080
+
+# NOTE: We keep the default Nginx CMD/ENTRYPOINT.
+# This ensures Nginx starts correctly with the configuration we provide.

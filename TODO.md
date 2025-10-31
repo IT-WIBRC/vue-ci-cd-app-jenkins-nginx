@@ -1,5 +1,12 @@
-- [ ] Require status checks to pass before merging: Enabled (You will check the Jenkins CI job here). (PR on develop and main branches)
-- [ ] add the PR Merge Guard job as a Required Status Check on the main branch
+- [x] Require status checks to pass before merging: Enabled (You will check the Jenkins CI job here). (PR on develop and main branches)
+- [x] add the PR Merge Guard job as a Required Status Check on the main branch
 - [x] Add linter when Pr to develop only and audit every times
 - [x] Make sure we do not run Jenkins when the PR Guard failed if by mistake we make a PR from a feature branch to main
-- [x]] As we are using podman, make sur to reference the images well using `docker.io` to avoid problems
+- [x] As we are using podman, make sur to reference the images well using `docker.io` to avoid problems
+- [x] Automate the setup process
+- [x] Update the readme to build a step by step documentation
+- [x] Make sure all the docker images are stopped on failure
+- [x] Add monitoring tools like Grafana + Prometheus to monitor Jenkins and the build process
+- [x] Find a way to cleanup old builds on Jenkins to save space
+- [x] Make sure to notify both on failure and success so devs know when their PR status
+- [ ] Add notification system to notify devs on slack or email on build status

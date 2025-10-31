@@ -1,0 +1,31 @@
+global:
+  # The default scrape interval is 15 seconds.
+  scrape_interval: 15s
+
+# A scrape configuration containing a job for Prometheus itself and your Jenkins service.
+scrape_configs:
+  # 1. Prometheus's own metrics (to monitor the monitoring server)
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # 2. Your Jenkins service metrics
+  - job_name: 'jenkins'
+    # Use the service name defined in your docker-compose file
+    # (The service is named 'jenkins' in your YAML)
+    static_configs:
+      # Use the container's service name and its internal port (8080),
+      # and the endpoint path provided by the Prometheus Metrics Plugin.
+      - targets: ['jenkins:8080']
+    # This path is exposed by the Jenkins Prometheus Metrics Plugin you installed.
+    metrics_path: '/prometheus/'
+
+  # 3. Nginx VTS Direct Scrape (NEW JOB)
+  # Nginx is serving the metrics directly in Prometheus format via VTS module.
+  - job_name: 'nginx-vts-direct'
+    static_configs:
+      # CRITICAL: Use the service name of your Nginx container ('app-prod')
+      # and the port defined for VTS metrics (7777).
+      - targets: ['app-prod:7777']
+    # CRITICAL: Set the path to where you configured VTS metrics in Nginx
+    metrics_path: '/metrics'
