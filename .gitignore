@@ -15,9 +15,7 @@ coverage
 coverages
 html
 *.local
-
-/cypress/videos/
-/cypress/screenshots/
+.cache
 
 # Editor directories and files
 .vscode/*
@@ -28,6 +26,8 @@ html
 *.njsproj
 *.sln
 *.sw?
+
+# .env
 
 *.tsbuildinfo
 

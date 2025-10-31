@@ -1,16 +1,31 @@
+# Use a highly-optimized, small base image for Nginx.
+# 'AS final' names this build stage for potential multi-stage use (though not fully leveraged here).
 FROM docker.io/library/nginx:stable-alpine AS final
 
+# Remove the default Nginx configuration to ensure our custom config is used.
 RUN rm /etc/nginx/nginx.conf
+
+# Copy the main, system-wide Nginx configuration (e.g., worker processes, logging).
 COPY nginx-main.conf /etc/nginx/nginx.conf
+
+# Copy the server-specific configuration (e.g., virtual host, location blocks).
 COPY nginx.conf /etc/nginx/conf.d/
 
+# Create and set permissions for necessary Nginx runtime directories.
+# This is crucial for running Nginx securely as a non-root user.
 RUN mkdir -p /var/run/nginx \
     && chown -R nginx:nginx /var/cache/nginx \
     && chown -R nginx:nginx /var/run/nginx
 
+# Copy the static application build files (e.g., HTML, CSS, JS) to Nginx's default serving directory.
 COPY dist /usr/share/nginx/html
 
+# Inform Docker that the container will listen on port 8080 (documentation/runtime flag support).
 EXPOSE 8080
 
+# Switch the running user to 'nginx' for security (runs the web server process with minimal privilege).
 USER nginx
+
+# Define the command to start Nginx, ensuring it runs in the foreground ('daemon off;')
+# so the container doesn't immediately exit.
 CMD ["nginx", "-g", "daemon off;"]

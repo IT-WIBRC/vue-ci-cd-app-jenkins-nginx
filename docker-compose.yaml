@@ -1,0 +1,88 @@
+services:
+  # 1. Isolated Docker Daemon Service (DinD)
+  # This container runs a completely separate, nested Docker environment for building/testing.
+  jenkins-dind:
+    image: docker:dind # The official Docker-in-Docker image.
+    container_name: jenkins-dind
+    privileged: true # CRITICAL: Required to grant the container capabilities to run a daemon.
+    # Exposes port 2375 INTERNALLY within the Docker network for the agent to connect.
+    # This prevents external host access, enhancing security.
+    expose:
+      - 2375
+    volumes:
+      # Use a named volume to persist the isolated Docker daemon's data (images, volumes, etc.)
+      # This ensures built images and cached layers are kept between reboots.
+      - docker_data:/var/lib/docker
+    environment:
+      # Disables TLS verification for simpler connection within the trusted Docker network.
+      - DOCKER_TLS_CERTDIR=
+
+  # 2. Jenkins Master Service
+  # The central hub for all CI/CD orchestration.
+  jenkins:
+    image: jenkins/jenkins:latest # Use the official Jenkins image.
+    user: root # Often required for initialization/permission management.
+    privileged: true
+    container_name: jenkins
+    ports:
+      # Map host port 8080 to container port 8080 for accessing the Jenkins web UI.
+      - "8080:8080"
+      # Map host port 50000 to container port 50000 for agent communication (JNLP).
+      - "50000:50000"
+    volumes:
+      # Persist all Jenkins configurations, job data, and user settings to a named volume.
+      - jenkins_home:/var/jenkins_home
+      # NOTE: The dangerous host socket mount (/var/run/docker.sock) is REMOVED from the master.
+    environment:
+      # Sets the container's timezone for accurate job logging and scheduling.
+      - TZ=Africa/Douala
+    healthcheck:
+      # Define a test to check if the Jenkins web interface is fully operational.
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/login || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 3. Automated Jenkins Agent Service (Secure DinD Client)
+  # This agent executes the actual build and deployment steps defined in the Jenkinsfile.
+  jenkins-agent:
+    image: jenkins-agent:latest # <-- Must be your custom image (Dockerfile.agent) with the Docker CLI installed.
+    container_name: docker-deploy-host-agent
+    # Runs as the non-root 'jenkins' user, following the Principle of Least Privilege.
+    user: jenkins
+    depends_on:
+      # Ensures the Jenkins master is ready before the agent attempts to connect.
+      jenkins:
+        condition: service_healthy
+      # Ensures the isolated Docker daemon is started before the agent needs to run commands.
+      jenkins-dind:
+        condition: service_started
+    volumes:
+      # CRITICAL: No host mounts for the Docker socket or binaries, enforcing security boundary.
+      # Volume for the agent's persistent job workspace.
+      - jenkins_agent_workspace:/home/jenkins/workspace
+    environment:
+      # Variables for the agent's connection back to the master.
+      - JENKINS_URL=${JENKINS_URL}
+      - JENKINS_AGENT_NAME=${JENKINS_AGENT_NAME}
+      - JENKINS_AGENT_SECRET=${JENKINS_AGENT_SECRET}
+      # CRITICAL: Tells the Docker CLI client inside the agent where to find the daemon on the network.
+      - DOCKER_HOST=tcp://jenkins-dind:2375
+    command:
+      # Starts the JNLP agent process as the non-root 'jenkins' user.
+      # The command is simplified as the complex permission setup required by DooD is eliminated.
+      java -jar /usr/share/jenkins/agent.jar -url ${JENKINS_URL} -secret ${JENKINS_AGENT_SECRET} -name ${JENKINS_AGENT_NAME} -webSocket -workDir /home/jenkins/workspace
+
+volumes:
+  # New volume for the isolated Docker daemon's data—a critical part of DinD persistence.
+  docker_data:
+  # Volume for the master's persistent data.
+  jenkins_home:
+  # Volume for the agent's persistent workspace.
+  jenkins_agent_workspace:
+
+networks:
+  default:
+    driver: bridge
+    driver_opts:
+      com.docker.network.dns: "8.8.8.8,1.1.1.1"
